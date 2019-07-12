@@ -46,10 +46,10 @@ def hello():
 def process():
     url = request.args.get("url")
     add_together.delay(42, 42)
-    return f'<pre>let\'s process {escape(url)}, result in /result?job_id=123!'
+    return '<pre>let\'s process ' + escape(url) + ', result in /result?job_id=123!'
 
 
 @app.route('/result/')
 def result():
     job_id = request.args.get("job_id")
-    return f'<pre>result of {escape(job_id)}: ...'
+    return '<pre>result of ' + escape(job_id) + ': ...'

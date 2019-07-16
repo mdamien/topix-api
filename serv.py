@@ -1,6 +1,10 @@
 from flask import Flask, escape, request
 from celery import Celery
-import time
+import time, uuid
+
+DOWNLOAD_CMD = """sudo docker exec -it 804c7eb326e9 python3 -i /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}"""
+RUN_PRE_PROCESS_CMD = """sudo docker exec -it 804c7eb326e9 python3 -i /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}"""
+RUN_TOPIX_CMD = """sudo docker exec -it 804c7eb326e9 /data/dmarie/topix/link/build/Topix 3 3 2 2 3 3 25 0 1 100 0.0001 5 5 /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}"""
 
 
 def make_celery(app):
@@ -29,9 +33,12 @@ celery = make_celery(app)
 
 
 @celery.task()
-def add_together(a, b):
-    time.sleep(10)
-    print(a, b, ':>', a + b)
+def run_topix(url):
+    job_id = str(uuid.uuid4())
+    print('download ' + url + ' to ./jobs/' + job_id + ' ...')
+    print(DOWNLOAD_CMD.format(url=url))
+    print(RUN_PRE_PROCESS_CMD.format(job_id=job_id))
+    print(RUN_TOPIX_CMD.format(job_id=job_id))
 
 
 @app.route('/')
@@ -45,7 +52,7 @@ def hello():
 @app.route('/process/')
 def process():
     url = request.args.get("url")
-    add_together.delay(42, 42)
+    run_topix.delay(url)
     return '<pre>let\'s process ' + escape(url) + ', result in /result?job_id=123!'
 
 

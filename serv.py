@@ -5,8 +5,8 @@ import subprocess
 import time, uuid, os
 
 EXTRACT_CMD = "dtrx -n ./jobs/{job_id}.zip --one=rename && mv {job_id} jobs/"
-RUN_PRE_PROCESS_CMD = """docker exec -it 804c7eb326e9 python3 -i /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}"""
-RUN_TOPIX_CMD = """docker exec -it 804c7eb326e9 /data/dmarie/topix/link/build/Topix 3 3 2 2 3 3 25 0 1 100 0.0001 5 5 /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}"""
+RUN_PRE_PROCESS_CMD = """docker exec -it 804c7eb326e9 python3 /data/mcorneli/WDTopix/build_data.py /data/dmarie/topix-api/jobs/{job_id}/"""
+RUN_TOPIX_CMD = """docker exec -it 804c7eb326e9 /data/dmarie/topix/link/build/Topix 3 3 2 2 3 3 25 0 1 100 0.0001 5 5 /data/dmarie/topix-api/jobs/{job_id}/"""
 
 
 def make_celery(app):
@@ -34,7 +34,7 @@ app.config.update(
 celery = make_celery(app)
 
 
-def call(cmd, live=False):
+def call(cmd, live=False, log_file=None):
     print("exec", cmd)
     if not live:
         r = subprocess.run(cmd,
@@ -43,20 +43,25 @@ def call(cmd, live=False):
         print("returned >", r.stdout)
         print("returned err >", r.stderr)
     else:
+        log = open(log_file, 'w')
         for line in os.popen(cmd):
             print(' > ' + line)
+            log.write(line)
+            log.flush()
 
 
 @celery.task()
 def run_topix(url, job_id):
-    call(['wget', url, '-O', "./jobs/{job_id}.zip".format(job_id=job_id)])
-    open('jobs/{job_id}.download_done'.format(job_id=job_id), 'w').write('')
+    dir = 'jobs/' + job_id
+    call(['wget', url, '-O', dir + ".zip"])
+    open(dir + '.download_done', 'w').write('')
     call(EXTRACT_CMD.format(job_id=job_id))
-    open('jobs/{job_id}.extract_done'.format(job_id=job_id), 'w').write('')
-    call(RUN_PRE_PROCESS_CMD.format(job_id=job_id), live=True)
-    open('jobs/{job_id}.pre_process_done'.format(job_id=job_id), 'w').write('')
-    call(RUN_TOPIX_CMD.format(job_id=job_id), live=True)
-    open('jobs/{job_id}.topix_done'.format(job_id=job_id), 'w').write('')
+    open(dir + '.extract_done', 'w').write('')
+    call(RUN_PRE_PROCESS_CMD.format(job_id=job_id), live=True, log_file=dir + '.pre_process.log')
+    open(job_id + '.pre_process_done', 'w').write('')
+    call('mkdir ' + dir + '/out')
+    call(RUN_TOPIX_CMD.format(job_id=job_id), live=True, log_file=dir + '.topix.log')
+    open(job_id + '.topix_done', 'w').write('')
 
 
 @app.route('/')
@@ -87,7 +92,7 @@ def result():
     pre_process_log = None
     try:
         pre_process_log = open(
-            "jobs/" + job_id + "/pre_process.log"
+            "jobs/" + job_id + ".pre_process.log"
         ).readlines()
     except:
         pass
@@ -95,7 +100,7 @@ def result():
     topix_log = None
     try:
         topix_log = open(
-            "jobs/" + job_id + "/topix.log"
+            "jobs/" + job_id + ".topix.log"
         ).readlines()
     except:
         pass
